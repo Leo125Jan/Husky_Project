@@ -318,7 +318,7 @@ class RobotArm():
 
 		#need to build a subscriber to subscribe the topic which is published by cameraW
 		rospy.init_node("get_position", anonymous = True);
-		coordinate_m = rospy.wait_for_message("Topic", geometry_msgs.msg.Twist, timeout = None);
+		coordinate_m = rospy.wait_for_message("/tennis_position", geometry_msgs.msg.Twist, timeout = None);
 		self.get_position(coordinate_m);
 
 if __name__ == '__main__':
