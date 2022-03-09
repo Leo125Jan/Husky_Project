@@ -6,6 +6,7 @@ sys.setdefaultencoding('utf-8')
 import roslib; roslib.load_manifest('kinova_demo')
 import rospy
 from std_msgs.msg import Int32
+from geometry_msgs.msg import Twist
 import sys
 import numpy as np
 
@@ -181,8 +182,9 @@ class RobotArm():
 		self.arm_start = rospy.ServiceProxy('/j2n6s300_driver/in/start', Start);
 		self.arm_s = rospy.Subscriber('arm/command', Int32, self.arm_get);
 		self.arm_p = rospy.Publisher('arm/finish', Int32, queue_size = 1);
-		self.trig_hus = rospy.Publisher('/trigger_husky', std_msgs.msg.Int32, queue_size = 5);
 
+		self.trig_hus = rospy.Publisher('/trigger_husky', Int32, queue_size = 1);
+		self.G0_message = Int32();
 		self.m = self.setpoint;
 		self.condition = 0;
 
@@ -196,9 +198,9 @@ class RobotArm():
 
 	def go(self): 
 
-		t1 = threading.Thread(target = self.arm_go_thread);
-		t1.start();
-		t1.join();
+		t3 = threading.Thread(target = self.arm_go_thread);
+		t3.start();
+		t3.join();
 
 	def arm_go_thread(self):
 
@@ -288,9 +290,15 @@ class RobotArm():
 
 	def Husky_go(self):
 
-		self.trig_hus.publish(1);
+		self.G0_message.data = int(1);
+		self.trig_hus.publish(self.G0_message);
 
-	def get_position(self, coord):
+	def Husky_stop(self):
+
+		self.G0_message.data = int(0);
+		self.trig_hus.publish(self.G0_message);
+
+	def get_position_grip(self, coord):
 
 		self.m[1] = coord.linear.x;
 		self.m[2] = coord.linear.y;
@@ -298,33 +306,46 @@ class RobotArm():
 
 		self.go();
 
-		# 1 is for gripping ball
-		if self.condition == 1:
+		t1 = threading.Thread(target = self.grip_ball);
+		t1.start();
+		t1.join();
 
-			self.grip_ball();
-			self.Husky_go();
+		self.Husky_go();
 
-		# 2 is for gripping ball
-		if self.condition == 2:
+	def get_position_throw(self):
 
-			self.throw_ball();
-			self.Husky_go();
+		t2 = threading.Thread(target = self.throw_ball);
+		t2.start();
+		t2.join();
+
+		self.Husky_go();
 
 	def Go_to_target(self):
 
-		rospy.init_node("get_kinova_type", anonymous = True);
-		_type = rospy.wait_for_message("/trigger_kinova", std_msgs.msg.Int32, timeout = None);
-		self.condition = _type.data;
+		# subscribe to /trigger_kinova and wait for message
+		_type = rospy.wait_for_message("/trigger_kinova", Int32, timeout = None);
+		self.condition = int(_type.data);
 
-		#need to build a subscriber to subscribe the topic which is published by cameraW
-		rospy.init_node("get_position", anonymous = True);
-		coordinate_m = rospy.wait_for_message("Topic", geometry_msgs.msg.Twist, timeout = None);
-		self.get_position(coordinate_m);
+		self.Husky_stop();
+	
+		# 1 is for gripping ball
+		if self.condition == 1:
+
+			# subscribe to camera and wait for message
+			coordinate_m = rospy.wait_for_message("/tennis_position", Twist, timeout = None);
+			self.get_position(coordinate_m);
+
+		# 2 is for gripping ball
+		elif self.condition == 2:
+
+			self.get_position_throw();
 
 if __name__ == '__main__':
 
 	kinova_robotType = 'j2n6s300';
 	KINOVA = RobotArm(kinova_robotType);
+	KINOVA.go_to_setpoint();
+	KINOVA.throw_ball();
 
 	while True:
 
@@ -337,4 +358,4 @@ if __name__ == '__main__':
 			KINOVA.stop();
 			break;
 
-		t.sleep(0.5);
+		t.sleep(1);
