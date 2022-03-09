@@ -338,7 +338,14 @@ class RobotArm():
 		# 2 is for gripping ball
 		elif self.condition == 2:
 
+<<<<<<< HEAD
 			self.get_position_throw();
+=======
+		#need to build a subscriber to subscribe the topic which is published by cameraW
+		rospy.init_node("get_position", anonymous = True);
+		coordinate_m = rospy.wait_for_message("/tennis_position", geometry_msgs.msg.Twist, timeout = None);
+		self.get_position(coordinate_m);
+>>>>>>> d7636f60b53e1a89a444ccd4900dfb1fa5273528
 
 if __name__ == '__main__':
 
@@ -358,4 +365,8 @@ if __name__ == '__main__':
 			KINOVA.stop();
 			break;
 
+<<<<<<< HEAD
 		t.sleep(1);
+=======
+		t.sleep(0.5);
+>>>>>>> d7636f60b53e1a89a444ccd4900dfb1fa5273528
