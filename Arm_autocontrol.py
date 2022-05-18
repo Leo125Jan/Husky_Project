@@ -184,9 +184,11 @@ class RobotArm():
 		self.arm_p = rospy.Publisher('arm/finish', Int32, queue_size = 1);
 
 		self.trig_hus = rospy.Publisher('/trigger_husky', Int32, queue_size = 1);
+		self.trig_jackal = rospy.Publisher('/trigger_Jackal', Int32, queue_size = 1);
 		self.G0_message = Int32();
 		self.m = self.setpoint;
 		self.condition = 0;
+		self.check = 0;
 
 	def arm_get(self, data):
 
@@ -223,6 +225,7 @@ class RobotArm():
 	def go_to_setpoint(self):
 
 		self.arm_home();
+		print("home finish")
 
 	def stop(self):
 
@@ -282,43 +285,90 @@ class RobotArm():
 
 	def grip_ball(self):
 
+		t.sleep(1);
+
 		gripper_client(self.prefix,[6800,6800,6800]);
+
+		self.check = 1;
 
 	def throw_ball(self):
 
+		t.sleep(1);
+
 		gripper_client(self.prefix,[0,0,0]);
+
+		self.check = 2;
 
 	def Husky_go(self):
 
 		self.G0_message.data = int(1);
-		self.trig_hus.publish(self.G0_message);
+		self.trig_hus.publish(self.G0_message);	
 
 	def Husky_stop(self):
 
 		self.G0_message.data = int(0);
-		self.trig_hus.publish(self.G0_message);
+		self.trig_husg.publish(self.G0_message);
 
-	def get_position_grip(self, coord):
+	def Jackal_go(self):
 
-		self.m[1] = coord.linear.x;
-		self.m[2] = coord.linear.y;
-		self.m[3] = coord.linear.z;
+		self.G0_message.data = int(1);
+		self.trig_jackal.publish(self.G0_message);
+
+	def go_to_onepoint(self):
+
+		self.m[0] = 0.03159;
+		self.m[1] = -0.3635;
+		self.m[2] =  0.4725;
+		self.m[3] = 3.0146;
+		self.m[4] = -0.1450;
+		self.m[5] = -0.2362;
 
 		self.go();
 
-		t1 = threading.Thread(target = self.grip_ball);
-		t1.start();
-		t1.join();
+	def go_to_twopoint(self):
 
-		self.Husky_go();
+		self.m[0] = 0.0615;
+		self.m[1] = -0.4489;
+		self.m[2] =  0.3298;
+		self.m[3] = 3.1144;
+		self.m[4] = 0.9612;
+		self.m[5] = -1.3132;
+
+		self.go();		
+
+	def get_position_grip(self, coord):
+
+		print("Get tennis position");
+
+		self.go_to_onepoint();
+
+		self.m[0] = coord.linear.x;
+		self.m[1] = coord.linear.y;
+		self.m[2] = coord.linear.z;
+
+		self.go();
+
+		t.sleep(2);
+
+		self.grip_ball();
+
+		self.go_to_setpoint();
+
+		if self.check == 1:
+
+			self.Husky_go();
 
 	def get_position_throw(self):
 
-		t2 = threading.Thread(target = self.throw_ball);
-		t2.start();
-		t2.join();
+		print("Go to jackal");
 
-		self.Husky_go();
+		self.go_to_twopoint();
+
+		t.sleep(1);
+
+		self.throw_ball();
+
+		self.Jackal_go();
 
 	def Go_to_target(self):
 
@@ -326,24 +376,25 @@ class RobotArm():
 		_type = rospy.wait_for_message("/trigger_kinova", Int32, timeout = None);
 		self.condition = int(_type.data);
 
-		self.Husky_stop();
+		t.sleep(2);
+
+		# self.Husky_stop();
 	
 		# 1 is for gripping ball
 		if self.condition == 1:
 
+			t.sleep(3.5);
+
 			# subscribe to camera and wait for message
 			coordinate_m = rospy.wait_for_message("/tennis_position", Twist, timeout = None);
-			self.get_position(coordinate_m);
+			self.get_position_grip(coordinate_m);
 
-		# 2 is for gripping ball
+		# 2 is for throwing ball
 		elif self.condition == 2:
 
-			self.get_position_throw();
+			t.sleep(1);
 
-		#need to build a subscriber to subscribe the topic which is published by cameraW
-		rospy.init_node("get_position", anonymous = True);
-		coordinate_m = rospy.wait_for_message("/tennis_position", Twist, timeout = None);
-		self.get_position(coordinate_m);
+			self.get_position_throw();
 
 if __name__ == '__main__':
 
@@ -352,16 +403,13 @@ if __name__ == '__main__':
 	KINOVA.go_to_setpoint();
 	KINOVA.throw_ball();
 
-	while True:
+	try:
+		KINOVA.Go_to_target();
 
-		try:
+		t.sleep(1.5);
 
-			KINOVA.Go_to_target();
+		KINOVA.Go_to_target();
 
-		except rospy.ROSInterruptException:
+	except rospy.ROSInterruptException:
 
-			KINOVA.stop();
-			break;
-
-		t.sleep(1);
-		
+		KINOVA.stop();
